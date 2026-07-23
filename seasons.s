@@ -33,7 +33,11 @@
 .BANK $02 SLOT 1
 .ORG 0
 
+.ifdef BUILD_ENHANCED
+	.include "code/bank2_enhanced.s"
+.else
 	.include "code/bank2.s"
+.endif
 
 
 .BANK $03 SLOT 1
@@ -818,7 +822,11 @@ oamData_15_4e0c:
 	.include {"{GAME_DATA_DIR}/treasureObjectData.s"}
 
 	m_section_free Bank_15_3 NAMESPACE scriptHelp
+.ifdef BUILD_ENHANCED
+		.include "scripts/seasons/scriptHelper_enhanced.s"
+.else
 		.include "scripts/seasons/scriptHelper.s"
+.endif
 	.ends
 
 m_section_free Seasons_Interactions_Bank15 NAMESPACE seasonsInteractionsBank15
@@ -932,7 +940,11 @@ m_section_free Bank3f NAMESPACE bank3f
 .define BANK_3f $3f
 
 	.include "code/loadGraphics.s"
+.ifdef BUILD_ENHANCED
+	.include "code/treasureAndDrops_enhanced.s"
+.else
 	.include "code/treasureAndDrops.s"
+.endif
 	.include "code/textbox.s"
 	.include "object_code/common/interactions/faroreMakeChest.s"
 

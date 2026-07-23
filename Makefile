@@ -23,6 +23,10 @@ CC = wla-gb
 LD = wlalink
 PYTHON = python3
 
+# Always use the short name. If MAKE is the full path to make.exe and that path
+# contains spaces, unquoted $(MAKE) in recipes breaks (/usr/bin/sh splits on them).
+MAKE := make
+
 TOPDIR = $(CURDIR)
 
 # Default to parallel build to make things much faster
@@ -47,20 +51,20 @@ MAKEFLAGS += --no-print-directory
 
 
 all:
-	@$(MAKE) ages
-	@$(MAKE) seasons
+	@"$(MAKE)" ages
+	@"$(MAKE)" seasons
 
 ages:
 	@echo -e "$(BOLD)====================$(NC)"
-	@echo -e "$(BOLD)Building $(BLUE)Ages$(BOLD)...$(NC)"
+	@echo -e "$(BOLD)Building $(BLUE)Ages$(BOLD)$(if $(BUILD_ENHANCED), enhanced,)$(BOLD)...$(NC)"
 	@echo -e "$(BOLD)====================$(NC)"
-	@ROM_AGES=1 $(MAKE) $@.gbc
+	@ROM_AGES=1 "$(MAKE)" BUILD_ENHANCED=$(BUILD_ENHANCED) $(if $(BUILD_ENHANCED),ages_enhanced,ages).gbc
 
 seasons:
 	@echo -e "$(BOLD)====================$(NC)"
-	@echo -e "$(BOLD)Building $(RED)Seasons$(BOLD)...$(NC)"
+	@echo -e "$(BOLD)Building $(RED)Seasons$(BOLD)$(if $(BUILD_ENHANCED), enhanced,)$(BOLD)...$(NC)"
 	@echo -e "$(BOLD)====================$(NC)"
-	@ROM_SEASONS=1 $(MAKE) $@.gbc
+	@ROM_SEASONS=1 "$(MAKE)" BUILD_ENHANCED=$(BUILD_ENHANCED) $(if $(BUILD_ENHANCED),seasons_enhanced,seasons).gbc
 
 
 # Skip the majority of this makefile if we haven't specified the game yet.
@@ -82,6 +86,14 @@ ifeq ($(BUILD_VANILLA), true)
 else
 	AGES_BUILD_DIR = build_ages_e
 	SEASONS_BUILD_DIR = build_seasons_e
+endif
+
+# Single-slot Biggoron hack (uses *_enhanced.s sources)
+# Require =1 so a blank BUILD_ENHANCED= from the vanilla bat does not match.
+ifeq ($(BUILD_ENHANCED),1)
+	DEFINES += -D BUILD_ENHANCED
+	AGES_BUILD_DIR := $(AGES_BUILD_DIR)_enh
+	SEASONS_BUILD_DIR := $(SEASONS_BUILD_DIR)_enh
 endif
 
 ifdef FORCE_SECTIONS
@@ -107,29 +119,38 @@ endif
 DEFINES += -D $(GAME_DEFINE) -D BUILD_DIR="$(BUILD_DIR)/"
 CFLAGS += $(DEFINES)
 
+ifeq ($(BUILD_ENHANCED),1)
+ROM_OUT = $(GAME)_enhanced
+else
+ROM_OUT = $(GAME)
+endif
+
+$(info Using BUILD_DIR=$(BUILD_DIR) ROM_OUT=$(ROM_OUT).gbc DEFINES=$(DEFINES))
+
 # Locations for gfx files: uncompressible, compressible, and precompressed
-GFX_UNCMP_DIR = 'gfx'
-GFX_CMP_DIR = 'gfx_compressible'
-GFX_PRECMP_DIR = 'precompressed/gfx_compressible'
+# (no quotes — literal quotes break under Windows make when the cwd has spaces)
+GFX_UNCMP_DIR = gfx
+GFX_CMP_DIR = gfx_compressible
+GFX_PRECMP_DIR = precompressed/gfx_compressible
 
 
 OBJS = $(BUILD_DIR)/$(GAME).o $(BUILD_DIR)/audio.o
 
 
+# Use grep for extensions instead of find -name '*.ext'. Windows make/bash can
+# drop those quotes; then *.s expands to ages.s/seasons.s in the project root.
 # All .bin gfx files
 BIN_GFX_FILES  = $(shell find $(GFX_UNCMP_DIR)/common  $(GFX_CMP_DIR)/common \
-                              $(GFX_UNCMP_DIR)/$(GAME) $(GFX_CMP_DIR)/$(GAME) -name '*.bin')
+                              $(GFX_UNCMP_DIR)/$(GAME) $(GFX_CMP_DIR)/$(GAME) -type f | grep '\.bin$$')
 
 # All .png gfx files
 PNG_GFX_FILES  = $(shell find $(GFX_UNCMP_DIR)/common  $(GFX_CMP_DIR)/common \
-                              $(GFX_UNCMP_DIR)/$(GAME) $(GFX_CMP_DIR)/$(GAME) -name '*.png')
+                              $(GFX_UNCMP_DIR)/$(GAME) $(GFX_CMP_DIR)/$(GAME) -type f | grep '\.png$$')
 
 # All .bin & .png gfx files by category (uncompressible, compressible, precompressed)
-UNCMP_GFX_FILES  = $(shell find $(GFX_UNCMP_DIR)/common $(GFX_UNCMP_DIR)/$(GAME) \
-                     -name '*.bin' -or -name '*.png')
-CMP_GFX_FILES    = $(shell find $(GFX_CMP_DIR)/common $(GFX_CMP_DIR)/$(GAME) \
-                     -name '*.bin' -or -name '*.png')
-PRECMP_GFX_FILES = $(shell find $(GFX_PRECMP_DIR)/common $(GFX_PRECMP_DIR)/$(GAME) -name '*.cmp')
+UNCMP_GFX_FILES  = $(shell find $(GFX_UNCMP_DIR)/common $(GFX_UNCMP_DIR)/$(GAME) -type f | grep -E '\.(bin|png)$$')
+CMP_GFX_FILES    = $(shell find $(GFX_CMP_DIR)/common $(GFX_CMP_DIR)/$(GAME) -type f | grep -E '\.(bin|png)$$')
+PRECMP_GFX_FILES = $(shell find $(GFX_PRECMP_DIR)/common $(GFX_PRECMP_DIR)/$(GAME) -type f | grep '\.cmp$$')
 
 # List of all gfx files in their final form, ie. $(BUILD_DIR)/gfx/spr_link.cmp
 GFXFILES := $(foreach file, $(CMP_GFX_FILES) $(UNCMP_GFX_FILES), \
@@ -169,14 +190,14 @@ MAPPINGINDICESFILES := $(foreach file, $(MAPPINGINDICESFILES), \
 MAPPINGINDICESFILES := $(MAPPINGINDICESFILES:.bin=Indices.cmp)
 
 # Common data files (for both games)
-COMMONDATAFILES = $(shell find data/ -name '*.s' | grep -v '/ages/\|/seasons/')
+COMMONDATAFILES = $(shell find data/ -type f | grep '\.s$$' | grep -v '/ages/\|/seasons/')
 
 # Game-specific data files
-GAMEDATAFILES = $(shell find data/$(GAME)/ -name '*.s')
+GAMEDATAFILES = $(shell find data/$(GAME)/ -type f | grep '\.s$$')
 
-MAIN_ASM_FILES = $(shell find code/ object_code/ objects/ scripts/ -name '*.s' | grep -v '/$(OTHERGAME)/')
-AUDIO_FILES = $(shell find audio/ -name '*.s' -o -name '*.bin' | grep -v '/$(OTHERGAME)/')
-COMMON_INCLUDE_FILES = $(shell find constants/ include/ -name '*.s' | grep -v '/$(OTHERGAME)/')
+MAIN_ASM_FILES = $(shell find code/ object_code/ objects/ scripts/ -type f | grep '\.s$$' | grep -v '/$(OTHERGAME)/')
+AUDIO_FILES = $(shell find audio/ -type f | grep -E '\.(s|bin)$$' | grep -v '/$(OTHERGAME)/')
+COMMON_INCLUDE_FILES = $(shell find constants/ include/ -type f | grep '\.s$$' | grep -v '/$(OTHERGAME)/')
 
 
 ifneq ($(BUILD_VANILLA),true)
@@ -186,10 +207,12 @@ OPTIMIZE := -o
 endif
 
 
-$(GAME).gbc: $(OBJS) $(BUILD_DIR)/linkfile
+$(ROM_OUT).gbc: $(OBJS) $(BUILD_DIR)/linkfile
 	$(LD) -S $(BUILD_DIR)/linkfile $@
 ifeq ($(BUILD_VANILLA),true)
-	@-tools/build/verify-checksum.sh $(GAME)
+ifneq ($(BUILD_ENHANCED),1)
+	@-bash "./tools/build/verify-checksum.sh" $(GAME)
+endif
 endif
 	@echo -e "$(BOLD)Built $(GAME_COLOR)$@$(NC)."
 

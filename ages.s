@@ -34,7 +34,11 @@
 .BANK $02 SLOT 1
 .ORG 0
 
+.ifdef BUILD_ENHANCED
+	.include "code/bank2_enhanced.s"
+.else
 	.include "code/bank2.s"
+.endif
 	.include "code/roomInitialization.s"
 
 	 m_section_free roomGfxChanges NAMESPACE roomGfxChanges
@@ -888,7 +892,11 @@ m_section_superfree Terrain_Effects NAMESPACE terrainEffects
 	.ENDS
 
 	 m_section_free Bank_15_3 NAMESPACE scriptHelp
+.ifdef BUILD_ENHANCED
+		.include "scripts/ages/scriptHelper_enhanced.s"
+.else
 		.include "scripts/ages/scriptHelper.s"
+.endif
 	.ends
 
 
@@ -1094,7 +1102,11 @@ m_section_free Bank3f NAMESPACE bank3f
 .define BANK_3f $3f
 
 .include "code/loadGraphics.s"
+.ifdef BUILD_ENHANCED
+.include "code/treasureAndDrops_enhanced.s"
+.else
 .include "code/treasureAndDrops.s"
+.endif
 .include "code/textbox.s"
 
 data_5951:
